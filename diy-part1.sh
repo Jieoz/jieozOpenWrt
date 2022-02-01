@@ -18,7 +18,7 @@
 #echo 'src-git passwall https://github.com/xiaorouji/openwrt-passwall' >>feeds.conf.default
 cd package
 git clone https://github.com/rufengsuixing/luci-app-adguardhome.git
-git clone https://github.com/immortalwrt/luci-app-unblockneteasemusic.git
+git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic.git
 cd lean
 rm -rf luci-theme-argon  
 git clone -b 18.06 https://github.com/jerrykuku/luci-theme-argon.git  
