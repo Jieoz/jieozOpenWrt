@@ -8,6 +8,19 @@
 
 A template for building OpenWrt with GitHub Actions
 
+## 添加第三方插件
+把第三方ipk源码的package包放进 `source/feeds/packages` 目录,把第三方ipk源码的luci包放进 `source/feeds/luci/applications` 目录内，
+然后运行下面的命令:
+
+ ```
+./scripts/feeds update luci
+./scripts/feeds install -a -p luci
+./scripts/feeds update packages
+./scripts/feeds install -a -p packages
+```
+
+然后在 `make menuconfig` 里就能找到地方三的ipk了。打勾编译了就行了。
+
 ## Usage
 
 - Click the [Use this template](https://github.com/P3TERX/Actions-OpenWrt/generate) button to create a new repository.
