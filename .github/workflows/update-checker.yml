@@ -34,10 +34,11 @@ jobs:
 
     - name: Compare Commit Hash
       id: cacheHash
-      uses: actions/cache@v2
+      uses: actions/cache@v4 # <--- 已更新到 v4
       with:
         path: .commitHash
         key: HEAD-${{ steps.getHash.outputs.commitHash }}
+        enableCrossOsArchive: true # <--- 强烈建议添加此行
 
     - name: Save New Commit Hash
       if: steps.cacheHash.outputs.cache-hit != 'true'
