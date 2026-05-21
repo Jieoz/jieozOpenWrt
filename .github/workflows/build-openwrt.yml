@@ -154,6 +154,9 @@ jobs:
       run: |
         set -e
         cd openwrt
+        echo "--- Preflight bootstrap: tools + toolchain ---"
+        make tools/install -j$(nproc) || make tools/install -j1 V=s
+        make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
         echo "--- Fast preflight: frp ---"
         if [ -d package/frp ]; then
           make package/frp/compile -j1 V=s
