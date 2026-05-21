@@ -150,6 +150,18 @@ jobs:
         df -hT
         echo "---------------------------------------------"
 
+    - name: Preflight critical packages
+      run: |
+        set -e
+        cd openwrt
+        echo "--- Fast preflight: frp ---"
+        if [ -d package/frp ]; then
+          make package/frp/compile -j1 V=s
+        else
+          make package/feeds/packages/frp/compile -j1 V=s
+        fi
+        echo "--- Preflight OK ---"
+
     - name: Compile the firmware
       id: compile
       run: |
