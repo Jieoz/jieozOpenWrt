@@ -20,6 +20,7 @@ cd package
 git clone https://github.com/rufengsuixing/luci-app-adguardhome.git
 git clone https://github.com/fw876/helloworld.git
 git clone https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic.git
+git clone https://github.com/monokoo/luci-app-syncdial.git
 cd lean
 rm -rf luci-theme-argon  
 git clone -b master https://github.com/jerrykuku/luci-theme-argon.git  

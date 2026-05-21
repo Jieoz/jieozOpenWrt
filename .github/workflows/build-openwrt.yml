@@ -117,6 +117,12 @@ jobs:
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
+    - name: Validate custom packages
+      run: |
+        test -d openwrt/package/luci-app-syncdial
+        grep -q '^CONFIG_PACKAGE_luci-app-syncdial=y' .config
+        grep -q '^CONFIG_PACKAGE_luci-app-mwan3helper=y' .config
+
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
