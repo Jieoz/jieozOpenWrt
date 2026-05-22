@@ -123,6 +123,11 @@ jobs:
         grep -q '^CONFIG_PACKAGE_luci-app-syncdial=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-mwan3helper=y' .config
 
+    - name: Inject local custom packages
+      run: |
+        [ -d package ] && cp -a package/. openwrt/package/
+        [ -d openwrt/package/frp ] && sed -n '1,20p' openwrt/package/frp/Makefile
+
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
