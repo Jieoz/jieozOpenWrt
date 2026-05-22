@@ -126,6 +126,7 @@ jobs:
     - name: Inject local custom packages
       run: |
         [ -d package ] && cp -a package/. openwrt/package/
+        rm -rf openwrt/feeds/packages/net/frp
         [ -d openwrt/package/frp ] && sed -n '1,20p' openwrt/package/frp/Makefile
 
     - name: Load custom configuration
