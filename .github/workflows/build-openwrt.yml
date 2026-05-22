@@ -127,7 +127,7 @@ jobs:
       run: |
         [ -d package ] && cp -a package/. openwrt/package/
         rm -rf openwrt/feeds/packages/net/frp
-        [ -d openwrt/package/frp ] && sed -n '1,20p' openwrt/package/frp/Makefile
+        [ -d openwrt/package/custom/frp ] && sed -n '1,20p' openwrt/package/custom/frp/Makefile
 
     - name: Load custom configuration
       run: |
@@ -164,7 +164,9 @@ jobs:
         make tools/install -j$(nproc) || make tools/install -j1 V=s
         make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
         echo "--- Fast preflight: frp ---"
-        if [ -d package/frp ]; then
+        if [ -d package/custom/frp ]; then
+          make package/custom/frp/compile -j1 V=s
+        elif [ -d package/frp ]; then
           make package/frp/compile -j1 V=s
         else
           make package/feeds/packages/frp/compile -j1 V=s
