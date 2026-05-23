@@ -123,12 +123,6 @@ jobs:
         grep -q '^CONFIG_PACKAGE_luci-app-syncdial=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-mwan3helper=y' .config
 
-    - name: Inject local custom packages
-      run: |
-        [ -d package ] && cp -a package/. openwrt/package/
-        rm -rf openwrt/feeds/packages/net/frp
-        [ -d openwrt/package/custom/frp ] && sed -n '1,20p' openwrt/package/custom/frp/Makefile
-
     - name: Load custom configuration
       run: |
         [ -e files ] && mv files openwrt/files
@@ -155,23 +149,6 @@ jobs:
         echo "--- Disk usage after downloading packages ---"
         df -hT
         echo "---------------------------------------------"
-
-    - name: Preflight critical packages
-      run: |
-        set -e
-        cd openwrt
-        echo "--- Preflight bootstrap: tools + toolchain ---"
-        make tools/install -j$(nproc) || make tools/install -j1 V=s
-        make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
-        echo "--- Fast preflight: frp ---"
-        if [ -d package/custom/frp ]; then
-          make package/custom/frp/compile -j1 V=s
-        elif [ -d package/frp ]; then
-          make package/frp/compile -j1 V=s
-        else
-          make package/feeds/packages/frp/compile -j1 V=s
-        fi
-        echo "--- Preflight OK ---"
 
     - name: Compile the firmware
       id: compile
