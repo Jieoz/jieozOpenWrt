@@ -18,7 +18,7 @@ PKG_BUILD_FLAGS:=no-mips16
 
 GO_PKG:=github.com/fatedier/frp
 GO_PKG_BUILD_PKG:=github.com/fatedier/frp/cmd/...
-GO_PKG_TAGS:=noweb noasm
+GO_PKG_TAGS:=noweb withoutkcp
 GO_PKG_LDFLAGS:=-s -w
 GO_PKG_LDFLAGS_X:=github.com/fatedier/frp/pkg/util/version.version=$(PKG_VERSION)
 
