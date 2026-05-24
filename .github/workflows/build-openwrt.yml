@@ -127,7 +127,10 @@ jobs:
       run: |
         [ -d package ] && cp -a package/. openwrt/package/
         rm -rf openwrt/feeds/packages/net/frp
-        [ -d openwrt/package/custom/frp ] && sed -n '1,20p' openwrt/package/custom/frp/Makefile
+        rm -rf openwrt/package/frp
+        test -d openwrt/package/custom/frp
+        echo "--- injected custom frp ---"
+        sed -n '1,30p' openwrt/package/custom/frp/Makefile
 
     - name: Load custom configuration
       run: |
