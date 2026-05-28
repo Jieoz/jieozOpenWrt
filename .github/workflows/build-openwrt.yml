@@ -126,11 +126,10 @@ jobs:
     - name: Inject local custom packages
       run: |
         [ -d package ] && cp -a package/. openwrt/package/
-        rm -rf openwrt/feeds/packages/net/frp
-        rm -rf openwrt/package/frp
-        test -d openwrt/package/custom/frp
-        echo "--- injected custom frp ---"
-        sed -n '1,30p' openwrt/package/custom/frp/Makefile
+        rm -rf openwrt/package/custom/frp
+        echo "--- use feeds builtin frp ---"
+        test -d openwrt/feeds/packages/net/frp
+        sed -n '1,30p' openwrt/feeds/packages/net/frp/Makefile
 
     - name: Load custom configuration
       run: |
@@ -167,13 +166,7 @@ jobs:
         make tools/install -j$(nproc) || make tools/install -j1 V=s
         make toolchain/install -j$(nproc) || make toolchain/install -j1 V=s
         echo "--- Fast preflight: frp ---"
-        if [ -d package/custom/frp ]; then
-          make package/custom/frp/compile -j1 V=s
-        elif [ -d package/frp ]; then
-          make package/frp/compile -j1 V=s
-        else
-          make package/feeds/packages/frp/compile -j1 V=s
-        fi
+        make package/feeds/packages/frp/compile -j1 V=s
         echo "--- Preflight OK ---"
 
     - name: Compile the firmware
