@@ -26,9 +26,15 @@ include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
 define Build/Compile
 	( \
-		$(MAKE) -C $(PKG_BUILD_DIR)/web/frpc install ; \
-		$(MAKE) -C $(PKG_BUILD_DIR)/web/frps install ; \
-		$(MAKE) -C $(PKG_BUILD_DIR) web ; \
+		NODE_VER="$$(node --version 2>/dev/null || true)" ; \
+		NODE_MAJOR="$${NODE_VER#v}" ; NODE_MAJOR="$${NODE_MAJOR%%.*}" ; \
+		if [ -n "$$NODE_MAJOR" ] && [ "$$NODE_MAJOR" -ge 20 ] 2>/dev/null; then \
+			$(MAKE) -C $(PKG_BUILD_DIR)/web/frpc install ; \
+			$(MAKE) -C $(PKG_BUILD_DIR)/web/frps install ; \
+			$(MAKE) -C $(PKG_BUILD_DIR) web ; \
+		else \
+			echo "Host Node.js $$NODE_VER is too old for frp web build; falling back to noweb binaries" ; \
+		fi ; \
 		$(call GoPackage/Build/Compile) ; \
 	)
 endef
