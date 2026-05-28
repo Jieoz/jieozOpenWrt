@@ -20,11 +20,13 @@ GO_PKG:=github.com/fatedier/frp
 GO_PKG_BUILD_PKG:=github.com/fatedier/frp/cmd/...
 GO_PKG_TAGS:=noweb
 GO_PKG_LDFLAGS:=-s -w
-# OpenWrt golang-package.mk defaults to source-only module extraction, which can
-# prune packages only used after `noweb` tag/build-target selection. frp 0.51.3
-# then fails with "no required module provides package" for golib/errors and
-# pion/dtls internal packages. Force full module extraction for the custom FRP.
-GO_SOURCE_ONLY:=0
+# OpenWrt's golang-package.mk maps GO_PKG_INSTALL_ALL to GO_INSTALL_ALL.
+# Without this, golang-build.sh copies only selected source files from frp into
+# .go_work while dependencies are resolved from the module cache. frp 0.51.3 +
+# Go/OpenWrt then mis-resolves some subpackages as missing even though they are
+# present in dl/go-mod-cache. Keep the complete upstream tree for this custom
+# package, matching a normal upstream `go install` layout.
+GO_PKG_INSTALL_ALL:=1
 GO_PKG_LDFLAGS_X:=github.com/fatedier/frp/pkg/util/version.version=$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
