@@ -18,6 +18,7 @@ PKG_BUILD_FLAGS:=no-mips16
 
 GO_PKG:=github.com/fatedier/frp
 GO_PKG_BUILD_PKG:=github.com/fatedier/frp/cmd/...
+GO_PKG_TAGS:=noweb
 GO_PKG_LDFLAGS:=-s -w
 GO_PKG_LDFLAGS_X:=github.com/fatedier/frp/pkg/util/version.version=$(PKG_VERSION)
 
@@ -25,18 +26,7 @@ include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
 define Build/Compile
-	( \
-		NODE_VER="$$(node --version 2>/dev/null || true)" ; \
-		NODE_MAJOR="$${NODE_VER#v}" ; NODE_MAJOR="$${NODE_MAJOR%%.*}" ; \
-		if [ -n "$$NODE_MAJOR" ] && [ "$$NODE_MAJOR" -ge 20 ] 2>/dev/null; then \
-			$(MAKE) -C $(PKG_BUILD_DIR)/web/frpc install ; \
-			$(MAKE) -C $(PKG_BUILD_DIR)/web/frps install ; \
-			$(MAKE) -C $(PKG_BUILD_DIR) web ; \
-		else \
-			echo "Host Node.js $$NODE_VER is too old for frp web build; falling back to noweb binaries" ; \
-		fi ; \
-		$(call GoPackage/Build/Compile) ; \
-	)
+	$(call GoPackage/Build/Compile)
 endef
 
 define Package/frp/install
