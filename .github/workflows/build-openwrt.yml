@@ -150,8 +150,10 @@ jobs:
         cd openwrt
         make defconfig
         make download -j8
-        find dl -size -1024c -exec ls -l {} \;
-        find dl -size -1024c -exec rm -f {} \;
+        # Remove obviously broken tiny download artifacts, but never touch Go module
+        # cache files: valid Go source files can be smaller than 1 KiB.
+        find dl -path 'dl/go-mod-cache' -prune -o -type f -size -1024c -exec ls -l {} \;
+        find dl -path 'dl/go-mod-cache' -prune -o -type f -size -1024c -exec rm -f {} \;
         echo "--- Disk usage after downloading packages ---"
         df -hT
         echo "---------------------------------------------"
