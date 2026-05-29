@@ -45,8 +45,16 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+          /usr/share/swift /usr/local/.ghcup /usr/local/share/boost /usr/local/julia* /opt/az
+        if [ -f /swapfile ]; then
+          sudo swapoff /swapfile || true
+          sudo rm -f /swapfile
+        fi
         sudo docker image prune --all --force
+        echo "--- Disk usage after pruning preinstalled tools ---"
+        df -hT
+        echo "--------------------------------------------------"
         
         # 重新生成一个标准的 Ubuntu 22.04 sources.list 文件
         echo "deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list > /dev/null
