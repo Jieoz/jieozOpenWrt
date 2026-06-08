@@ -128,12 +128,19 @@ jobs:
     - name: Validate custom packages
       run: |
         test -d openwrt/package/luci-app-syncdial
-        test -d openwrt/package/luci-app-unblockneteasemusic
+        test -d openwrt/package/unblockneteasemusic-go-luci/UnblockNeteaseMusic
+        test -d openwrt/package/unblockneteasemusic-go-luci/luci-app-unblockneteasemusic
         grep -q '^CONFIG_PACKAGE_luci-app-syncdial=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-mwan3helper=y' .config
-        grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic-Go=y' .config
+        grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-unblockneteasemusic=y' .config
+        ! grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic-Go=y' .config
+        ! grep -q '^CONFIG_PACKAGE_luci-i18n-unblockneteasemusic-zh-cn=y' .config
         ! grep -q '^CONFIG_PACKAGE_luci-theme-opentomcat=y' .config
+        grep -q '^LUCI_DEPENDS:=.*+UnblockNeteaseMusic' openwrt/package/unblockneteasemusic-go-luci/luci-app-unblockneteasemusic/Makefile
+        ! grep -q '+node' openwrt/package/unblockneteasemusic-go-luci/luci-app-unblockneteasemusic/Makefile
+        grep -q '^PKG_NAME:=UnblockNeteaseMusic' openwrt/package/unblockneteasemusic-go-luci/UnblockNeteaseMusic/Makefile
+        ! find openwrt/package -path '*luci-app-unblockneteasemusic/Makefile' -not -path '*/unblockneteasemusic-go-luci/*' -print -quit | grep .
 
     - name: Inject local custom packages
       run: |
