@@ -36,7 +36,8 @@ clone_or_update https://github.com/asvow/luci-app-tailscale.git
 # 主流美观 LuCI 主题（中文环境可用）
 clone_or_update https://github.com/kiddin9/luci-theme-edge.git
 clone_or_update https://github.com/thinktip/luci-theme-neobird.git
-clone_or_update https://github.com/Leo-Jo-My/luci-theme-opentomcat.git
+# luci-theme-opentomcat is disabled: it breaks newer LuCI dispatcher/header rendering after config-preserving upgrades.
+# clone_or_update https://github.com/Leo-Jo-My/luci-theme-opentomcat.git
 clone_or_update https://github.com/sirpdboy/luci-theme-opentopd.git
 clone_or_update https://github.com/0x676e67/luci-theme-design.git
 

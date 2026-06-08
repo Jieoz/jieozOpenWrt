@@ -128,8 +128,12 @@ jobs:
     - name: Validate custom packages
       run: |
         test -d openwrt/package/luci-app-syncdial
+        test -d openwrt/package/luci-app-unblockneteasemusic
         grep -q '^CONFIG_PACKAGE_luci-app-syncdial=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-mwan3helper=y' .config
+        grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic-Go=y' .config
+        grep -q '^CONFIG_PACKAGE_luci-app-unblockneteasemusic=y' .config
+        ! grep -q '^CONFIG_PACKAGE_luci-theme-opentomcat=y' .config
 
     - name: Inject local custom packages
       run: |
