@@ -129,10 +129,20 @@ jobs:
       run: |
         set -e
         cd openwrt
-        test -d feeds/packages/lang/node/patches
+        # node v16 applies patches from a versioned subdir (patches/v16.x/), NOT the
+        # patches/ root. Detect the actual subdir so the patch is really applied.
+        node_patch_root="feeds/packages/lang/node/patches"
+        test -d "$node_patch_root"
+        node_patch_dir="$(dirname "$(find "$node_patch_root" -name '*-musl_support.patch' | head -n1)")"
+        if [ -z "$node_patch_dir" ] || [ ! -d "$node_patch_dir" ]; then
+          echo "ERROR: could not locate node version patch subdir under $node_patch_root" >&2
+          ls -R "$node_patch_root" >&2
+          exit 1
+        fi
+        echo "Installing cstdint patch into: $node_patch_dir"
         cp "$GITHUB_WORKSPACE/patches/openwrt-node/010-node-v16-v8-include-cstdint-for-gcc13.patch" \
-          feeds/packages/lang/node/patches/010-node-v16-v8-include-cstdint-for-gcc13.patch
-        test -s feeds/packages/lang/node/patches/010-node-v16-v8-include-cstdint-for-gcc13.patch
+          "$node_patch_dir/010-node-v16-v8-include-cstdint-for-gcc13.patch"
+        test -s "$node_patch_dir/010-node-v16-v8-include-cstdint-for-gcc13.patch"
 
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
@@ -154,7 +164,8 @@ jobs:
         ! test -d openwrt/package/luci-theme-neobird
         grep -q '^LUCI_TITLE:=LuCI support for UnblockNeteaseMusic (JavaScript)' openwrt/package/luci-app-unblockneteasemusic/Makefile
         grep -q '^LUCI_DEPENDS:=.*+node' openwrt/package/luci-app-unblockneteasemusic/Makefile
-        test -s openwrt/feeds/packages/lang/node/patches/010-node-v16-v8-include-cstdint-for-gcc13.patch
+        # cstdint patch must live inside node's versioned patch subdir, or it is silently ignored
+        test -n "$(find openwrt/feeds/packages/lang/node/patches -name '010-node-v16-v8-include-cstdint-for-gcc13.patch' -path '*v16*')"
 
     - name: Inject local custom packages
       run: |
