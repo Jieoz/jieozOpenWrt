@@ -125,6 +125,15 @@ jobs:
     - name: Update feeds
       run: cd openwrt && ./scripts/feeds update -a
 
+    - name: Patch feed packages
+      run: |
+        set -e
+        cd openwrt
+        test -d feeds/packages/lang/node/patches
+        cp "$GITHUB_WORKSPACE/patches/openwrt-node/010-node-v16-v8-include-cstdint-for-gcc13.patch" \
+          feeds/packages/lang/node/patches/010-node-v16-v8-include-cstdint-for-gcc13.patch
+        test -s feeds/packages/lang/node/patches/010-node-v16-v8-include-cstdint-for-gcc13.patch
+
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
@@ -145,6 +154,7 @@ jobs:
         ! test -d openwrt/package/luci-theme-neobird
         grep -q '^LUCI_TITLE:=LuCI support for UnblockNeteaseMusic (JavaScript)' openwrt/package/luci-app-unblockneteasemusic/Makefile
         grep -q '^LUCI_DEPENDS:=.*+node' openwrt/package/luci-app-unblockneteasemusic/Makefile
+        test -s openwrt/feeds/packages/lang/node/patches/010-node-v16-v8-include-cstdint-for-gcc13.patch
 
     - name: Inject local custom packages
       run: |
