@@ -29,8 +29,8 @@ clone_or_update() {
 
 clone_or_update https://github.com/rufengsuixing/luci-app-adguardhome.git
 clone_or_update https://github.com/fw876/helloworld.git
-# Official UnblockNeteaseMusic LuCI frontend (JavaScript/Node.js core).
-clone_or_update https://github.com/UnblockNeteaseMusic/luci-app-unblockneteasemusic.git
+# Golang-compatible UnblockNeteaseMusic LuCI frontend; avoids Node.js dependency from upstream JS package.
+clone_or_update https://github.com/cnsilvan/luci-app-unblockneteasemusic.git unblockneteasemusic-go-luci
 clone_or_update https://github.com/monokoo/luci-app-syncdial.git
 clone_or_update https://github.com/asvow/luci-app-tailscale.git
 
