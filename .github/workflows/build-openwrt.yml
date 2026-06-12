@@ -115,6 +115,17 @@ jobs:
           ${{ runner.os }}-lede-dl-
         enableCrossOsArchive: true # 建议添加此行
 
+    # Cache the ccache directory so toolchain/GCC/V8 object files survive across
+    # runs. Keyed by run number with a restore-key prefix so each run loads the
+    # most recent cache and then saves an updated one (rolling cache).
+    - name: Cache ccache
+      uses: actions/cache@v4
+      with:
+        path: openwrt/.ccache
+        key: ${{ runner.os }}-lede-ccache-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-lede-ccache-
+
     - name: Load custom feeds
       run: |
         [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
@@ -129,20 +140,27 @@ jobs:
       run: |
         set -e
         cd openwrt
-        # node v16 applies patches from a versioned subdir (patches/v16.x/), NOT the
-        # patches/ root. Detect the actual subdir so the patch is really applied.
-        node_patch_root="feeds/packages/lang/node/patches"
-        test -d "$node_patch_root"
-        node_patch_dir="$(dirname "$(find "$node_patch_root" -name '*-musl_support.patch' | head -n1)")"
-        if [ -z "$node_patch_dir" ] || [ ! -d "$node_patch_dir" ]; then
-          echo "ERROR: could not locate node version patch subdir under $node_patch_root" >&2
-          ls -R "$node_patch_root" >&2
+        # node applies patches ONLY from the subdir matching its major version
+        # (patches/v<major>.x/). Derive the version straight from node's Makefile
+        # instead of guessing from an unrelated patch's location, which previously
+        # landed the patch in v12.x while v16.19.1 was actually being built.
+        node_mk="feeds/packages/lang/node/Makefile"
+        test -f "$node_mk"
+        node_ver="$(sed -n 's/^PKG_VERSION:=[[:space:]]*//p' "$node_mk" | head -n1)"
+        node_major="${node_ver%%.*}"
+        if [ -z "$node_major" ]; then
+          echo "ERROR: could not parse node PKG_VERSION from $node_mk" >&2
+          grep -n PKG_VERSION "$node_mk" >&2
           exit 1
         fi
-        echo "Installing cstdint patch into: $node_patch_dir"
+        node_patch_dir="feeds/packages/lang/node/patches/v${node_major}.x"
+        mkdir -p "$node_patch_dir"
+        echo "node version $node_ver -> installing cstdint patch into: $node_patch_dir"
         cp "$GITHUB_WORKSPACE/patches/openwrt-node/010-node-v16-v8-include-cstdint-for-gcc13.patch" \
           "$node_patch_dir/010-node-v16-v8-include-cstdint-for-gcc13.patch"
         test -s "$node_patch_dir/010-node-v16-v8-include-cstdint-for-gcc13.patch"
+        # export the real dir so the validate step checks the directory, not the filename
+        echo "NODE_PATCH_DIR=openwrt/$node_patch_dir" >> "$GITHUB_ENV"
 
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
@@ -164,8 +182,11 @@ jobs:
         ! test -d openwrt/package/luci-theme-neobird
         grep -q '^LUCI_TITLE:=LuCI support for UnblockNeteaseMusic (JavaScript)' openwrt/package/luci-app-unblockneteasemusic/Makefile
         grep -q '^LUCI_DEPENDS:=.*+node' openwrt/package/luci-app-unblockneteasemusic/Makefile
-        # cstdint patch must live inside node's versioned patch subdir, or it is silently ignored
-        test -n "$(find openwrt/feeds/packages/lang/node/patches -name '010-node-v16-v8-include-cstdint-for-gcc13.patch' -path '*v16*')"
+        # cstdint patch must live inside node's ACTUAL versioned patch subdir.
+        # Check the real directory (exported by the patch step), not the filename,
+        # which contains "v16" regardless of where it lands.
+        test -n "$NODE_PATCH_DIR"
+        test -s "$NODE_PATCH_DIR/010-node-v16-v8-include-cstdint-for-gcc13.patch"
 
     - name: Inject local custom packages
       run: |
@@ -177,6 +198,10 @@ jobs:
       run: |
         [ -e files ] && mv files openwrt/files
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        # Enable ccache so the toolchain/GCC/V8 objects are cached across runs.
+        # Biggest single speedup: without this every run recompiles the toolchain
+        # from scratch (~1-2h). defconfig below keeps this symbol.
+        grep -q '^CONFIG_CCACHE=y' openwrt/.config || echo 'CONFIG_CCACHE=y' >> openwrt/.config
         chmod +x $DIY_P2_SH
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
