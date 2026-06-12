@@ -118,13 +118,15 @@ jobs:
     # Cache the ccache directory so toolchain/GCC/V8 object files survive across
     # runs. Keyed by run number with a restore-key prefix so each run loads the
     # most recent cache and then saves an updated one (rolling cache).
-    - name: Cache ccache
-      uses: actions/cache@v4
+    - name: Restore ccache
+      id: restore-ccache
+      uses: actions/cache/restore@v4
       with:
         path: openwrt/.ccache
         key: ${{ runner.os }}-lede-ccache-${{ github.run_id }}
         restore-keys: |
           ${{ runner.os }}-lede-ccache-
+        enableCrossOsArchive: true
 
     - name: Load custom feeds
       run: |
@@ -260,7 +262,21 @@ jobs:
         else
           make package/feeds/packages/frp/compile -j1 V=s
         fi
+        echo "--- ccache stats after preflight ---"
+        ccache -s || true
         echo "--- Preflight OK ---"
+
+    # Save ccache immediately after the expensive toolchain/preflight phase.
+    # GitHub's normal post-job cache save does not run usefully when the later
+    # full firmware compile hits the 6h job timeout/cancelled state, so saving
+    # here makes the next run faster without changing firmware contents.
+    - name: Save ccache after preflight
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: openwrt/.ccache
+        key: ${{ runner.os }}-lede-ccache-${{ github.run_id }}
+        enableCrossOsArchive: true
 
     - name: Compile the firmware
       id: compile
