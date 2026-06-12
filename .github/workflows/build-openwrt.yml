@@ -140,25 +140,35 @@ jobs:
       run: |
         set -e
         cd openwrt
-        # node applies patches ONLY from the subdir matching its major version
-        # (patches/v<major>.x/). Derive the version straight from node's Makefile
-        # instead of guessing from an unrelated patch's location, which previously
-        # landed the patch in v12.x while v16.19.1 was actually being built.
+        # node's Makefile selects PKG_VERSION + PATCH_DIR via CONFIG_NODEJS_<major>
+        # (e.g. CONFIG_NODEJS_16=y -> v16.19.1, ./patches/v16.x). The previous
+        # approach grep'd PKG_VERSION from the Makefile as plain text, which always
+        # returned the FIRST literal (v22.13.1) regardless of the selected config,
+        # and then mangled "v22.13.1" into a "vv22.x" dir. Derive the major from the
+        # actual .config selection so the patch lands in the dir node really reads.
         node_mk="feeds/packages/lang/node/Makefile"
         test -f "$node_mk"
-        node_ver="$(sed -n 's/^PKG_VERSION:=[[:space:]]*//p' "$node_mk" | head -n1)"
-        node_major="${node_ver%%.*}"
+        config_file="$GITHUB_WORKSPACE/.config"
+        test -f "$config_file"
+        node_major="$(sed -n 's/^CONFIG_NODEJS_\([0-9]\+\)=y$/\1/p' "$config_file" | head -n1)"
         if [ -z "$node_major" ]; then
-          echo "ERROR: could not parse node PKG_VERSION from $node_mk" >&2
-          grep -n PKG_VERSION "$node_mk" >&2
+          echo "ERROR: no CONFIG_NODEJS_<major>=y found in .config" >&2
+          grep -n 'CONFIG_NODEJS' "$config_file" >&2 || true
           exit 1
         fi
+        # node only ships patch dirs for these majors; bail loudly otherwise.
         node_patch_dir="feeds/packages/lang/node/patches/v${node_major}.x"
-        mkdir -p "$node_patch_dir"
-        echo "node version $node_ver -> installing cstdint patch into: $node_patch_dir"
-        cp "$GITHUB_WORKSPACE/patches/openwrt-node/010-node-v16-v8-include-cstdint-for-gcc13.patch" \
-          "$node_patch_dir/010-node-v16-v8-include-cstdint-for-gcc13.patch"
-        test -s "$node_patch_dir/010-node-v16-v8-include-cstdint-for-gcc13.patch"
+        if [ ! -d "$node_patch_dir" ]; then
+          echo "ERROR: node patch dir $node_patch_dir does not exist for NODEJS_${node_major}" >&2
+          ls -1 feeds/packages/lang/node/patches/ >&2 || true
+          exit 1
+        fi
+        echo "selected NODEJS_${node_major} -> installing cstdint patch into: $node_patch_dir"
+        # Use a 998- prefix to avoid colliding with node's existing 010-*.patch
+        # (010-execvp-arg-list-too-long.patch) and to apply after upstream patches.
+        cp "$GITHUB_WORKSPACE/patches/openwrt-node/998-v8-include-cstdint-for-gcc13.patch" \
+          "$node_patch_dir/998-v8-include-cstdint-for-gcc13.patch"
+        test -s "$node_patch_dir/998-v8-include-cstdint-for-gcc13.patch"
         # export the real dir so the validate step checks the directory, not the filename
         echo "NODE_PATCH_DIR=openwrt/$node_patch_dir" >> "$GITHUB_ENV"
 
@@ -186,7 +196,7 @@ jobs:
         # Check the real directory (exported by the patch step), not the filename,
         # which contains "v16" regardless of where it lands.
         test -n "$NODE_PATCH_DIR"
-        test -s "$NODE_PATCH_DIR/010-node-v16-v8-include-cstdint-for-gcc13.patch"
+        test -s "$NODE_PATCH_DIR/998-v8-include-cstdint-for-gcc13.patch"
 
     - name: Inject local custom packages
       run: |
