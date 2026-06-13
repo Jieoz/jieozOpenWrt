@@ -141,22 +141,16 @@ jobs:
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
-    - name: Patch feed packages (node gcc13 cstdint)
+    - name: Validate node version selection
       run: |
         set -e
-        # node v16's bundled V8 fails to build under gcc 13 (missing <cstdint>).
-        # node only reads patches from the PATCH_DIR matching the selected
-        # CONFIG_NODEJS_<major>, so derive the major from .config (NOT the Makefile,
-        # whose first literal PKG_VERSION is the wrong version) and drop the patch
-        # into that exact dir. Use a 998- prefix to avoid collision with shipped patches.
-        config_file="$GITHUB_WORKSPACE/.config"
-        node_major="$(sed -n 's/^CONFIG_NODEJS_\([0-9]\+\)=y$/\1/p' "$config_file" | head -n1)"
-        [ -n "$node_major" ] || { echo "no CONFIG_NODEJS_<major> selected"; exit 1; }
-        node_patch_dir="openwrt/feeds/packages/lang/node/patches/v${node_major}.x"
-        test -d "$node_patch_dir" || { echo "no patch dir for NODEJS_${node_major} at $node_patch_dir"; exit 1; }
-        cp "$GITHUB_WORKSPACE/patches/openwrt-node/998-v8-include-cstdint-for-gcc13.patch" "$node_patch_dir/"
-        echo "Installed cstdint patch into $node_patch_dir"
-        ls -l "$node_patch_dir"
+        # node 16.x is EOL and its bundled V8 fails under gcc 13 (missing <cstdint>
+        # and bundled-openssl header path breakage). We build node 20.x (Active LTS)
+        # instead: it declares +libopenssl and builds clean on gcc 13 with no patch
+        # hacks. Assert the config actually selects 20.x so a stray defconfig flip
+        # back to 16 fails loudly here rather than mid-compile.
+        grep -q '^CONFIG_NODEJS_20=y' "$GITHUB_WORKSPACE/.config"
+        ! grep -q '^CONFIG_NODEJS_16=y' "$GITHUB_WORKSPACE/.config"
 
     - name: Validate custom packages
       run: |
@@ -242,9 +236,21 @@ jobs:
         else
           make package/feeds/packages/frp/compile -j1 V=s
         fi
-        echo "--- Preflight: node/V8 (biggest single cost; compile here so its"
-        echo "--- objects land in ccache before the save point, even if the full"
-        echo "--- firmware compile later hits the 6h timeout) ---"
+        echo "--- Preflight: node deps then node/V8 (biggest single cost; compile"
+        echo "--- here so its objects land in ccache before the save point, even if"
+        echo "--- the full firmware compile later hits the 6h timeout) ---"
+        # Isolated `make <pkg>/compile` does NOT auto-build a package's deps, so
+        # build node's heavy prerequisites explicitly first. node 20 links the
+        # system openssl (+libopenssl); without this the V8/node compile dies on
+        # 'openssl/opensslv.h: No such file'. zlib/nghttp2/libuv/c-ares round out
+        # node's declared deps.
+        for dep in package/libs/openssl package/libs/zlib \
+                   feeds/packages/libs/libnghttp2 feeds/packages/libs/libuv \
+                   feeds/packages/libs/c-ares; do
+          if [ -d "$dep" ]; then
+            make "$dep/compile" -j$(nproc) || make "$dep/compile" -j1 V=s
+          fi
+        done
         make package/feeds/packages/node/compile -j$(nproc) || make package/feeds/packages/node/compile -j1 V=s
         echo "--- ccache stats after preflight ---"
         ccache -s || true
