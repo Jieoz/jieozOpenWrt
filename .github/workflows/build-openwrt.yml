@@ -141,15 +141,31 @@ jobs:
     - name: Install feeds
       run: cd openwrt && ./scripts/feeds install -a
 
+    - name: Patch feed packages (node gcc13 cstdint)
+      run: |
+        set -e
+        # node v16's bundled V8 fails to build under gcc 13 (missing <cstdint>).
+        # node only reads patches from the PATCH_DIR matching the selected
+        # CONFIG_NODEJS_<major>, so derive the major from .config (NOT the Makefile,
+        # whose first literal PKG_VERSION is the wrong version) and drop the patch
+        # into that exact dir. Use a 998- prefix to avoid collision with shipped patches.
+        config_file="$GITHUB_WORKSPACE/.config"
+        node_major="$(sed -n 's/^CONFIG_NODEJS_\([0-9]\+\)=y$/\1/p' "$config_file" | head -n1)"
+        [ -n "$node_major" ] || { echo "no CONFIG_NODEJS_<major> selected"; exit 1; }
+        node_patch_dir="openwrt/feeds/packages/lang/node/patches/v${node_major}.x"
+        test -d "$node_patch_dir" || { echo "no patch dir for NODEJS_${node_major} at $node_patch_dir"; exit 1; }
+        cp "$GITHUB_WORKSPACE/patches/openwrt-node/998-v8-include-cstdint-for-gcc13.patch" "$node_patch_dir/"
+        echo "Installed cstdint patch into $node_patch_dir"
+        ls -l "$node_patch_dir"
+
     - name: Validate custom packages
       run: |
         test -d openwrt/package/luci-app-syncdial
-        test -d openwrt/package/unblockneteasemusic-go-luci/UnblockNeteaseMusic
-        test -d openwrt/package/unblockneteasemusic-go-luci/luci-app-unblockneteasemusic
+        test -d openwrt/package/luci-app-unblockneteasemusic
         grep -q '^CONFIG_PACKAGE_luci-app-syncdial=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-mwan3helper=y' .config
         grep -q '^CONFIG_PACKAGE_luci-app-unblockneteasemusic=y' .config
-        grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic=y' .config
+        ! grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic=y' .config
         ! grep -q '^CONFIG_PACKAGE_UnblockNeteaseMusic-Go=y' .config
         ! grep -q '^CONFIG_PACKAGE_luci-i18n-unblockneteasemusic-zh-cn=y' .config
         ! grep -q '^CONFIG_PACKAGE_luci-theme-opentomcat=y' .config
@@ -158,12 +174,11 @@ jobs:
         ! test -d openwrt/package/luci-theme-design
         ! test -d openwrt/package/luci-theme-edge
         ! test -d openwrt/package/luci-theme-neobird
-        # Go-based UnblockNeteaseMusic LuCI app must depend on the Go core, NOT node.
-        grep -q '^LUCI_DEPENDS:=.*+UnblockNeteaseMusic' openwrt/package/unblockneteasemusic-go-luci/luci-app-unblockneteasemusic/Makefile
-        ! grep -q '+node' openwrt/package/unblockneteasemusic-go-luci/luci-app-unblockneteasemusic/Makefile
-        grep -q '^PKG_NAME:=UnblockNeteaseMusic' openwrt/package/unblockneteasemusic-go-luci/UnblockNeteaseMusic/Makefile
-        # make sure no stray JS-variant luci-app-unblockneteasemusic snuck in elsewhere
-        ! find openwrt/package -path '*luci-app-unblockneteasemusic/Makefile' -not -path '*/unblockneteasemusic-go-luci/*' -print -quit | grep .
+        # Official JS UnblockNeteaseMusic LuCI app depends on node (runtime to run app.js).
+        grep -q '^LUCI_TITLE:=LuCI support for UnblockNeteaseMusic (JavaScript)' openwrt/package/luci-app-unblockneteasemusic/Makefile
+        grep -q '^LUCI_DEPENDS:=.*+node' openwrt/package/luci-app-unblockneteasemusic/Makefile
+        # make sure no stray Go-variant snuck in
+        ! test -d openwrt/package/unblockneteasemusic-go-luci
 
     - name: Inject local custom packages
       run: |
@@ -227,6 +242,10 @@ jobs:
         else
           make package/feeds/packages/frp/compile -j1 V=s
         fi
+        echo "--- Preflight: node/V8 (biggest single cost; compile here so its"
+        echo "--- objects land in ccache before the save point, even if the full"
+        echo "--- firmware compile later hits the 6h timeout) ---"
+        make package/feeds/packages/node/compile -j$(nproc) || make package/feeds/packages/node/compile -j1 V=s
         echo "--- ccache stats after preflight ---"
         ccache -s || true
         echo "--- Preflight OK ---"
