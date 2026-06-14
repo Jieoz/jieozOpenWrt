@@ -186,7 +186,13 @@ jobs:
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
         # Enable ccache so the toolchain/GCC/V8 objects are cached across runs.
         # Biggest single speedup: without this every run recompiles the toolchain
-        # from scratch (~1-2h). defconfig below keeps this symbol.
+        # from scratch (~1-2h).
+        # CRITICAL: the CCACHE symbol is gated `bool "Use ccache" if DEVEL`
+        # (config/Config-devel.in). Without CONFIG_DEVEL=y, `make defconfig`
+        # silently DROPS a hand-appended CONFIG_CCACHE=y, so ccache never turns
+        # on and openwrt/.ccache is never created -> the cache save reports
+        # "Path(s) ... do not exist". Set DEVEL first so CCACHE survives defconfig.
+        grep -q '^CONFIG_DEVEL=y' openwrt/.config || echo 'CONFIG_DEVEL=y' >> openwrt/.config
         grep -q '^CONFIG_CCACHE=y' openwrt/.config || echo 'CONFIG_CCACHE=y' >> openwrt/.config
         chmod +x $DIY_P2_SH
         cd openwrt
@@ -236,22 +242,23 @@ jobs:
         else
           make package/feeds/packages/frp/compile -j1 V=s
         fi
-        echo "--- Preflight: node deps then node/V8 (biggest single cost; compile"
-        echo "--- here so its objects land in ccache before the save point, even if"
+        echo "--- Preflight: host node/V8 (biggest single cost; compile here so"
+        echo "--- its host objects land in ccache before the save point, even if"
         echo "--- the full firmware compile later hits the 6h timeout) ---"
-        # Isolated `make <pkg>/compile` does NOT auto-build a package's deps, so
-        # build node's heavy prerequisites explicitly first. node 20 links the
-        # system openssl (+libopenssl); without this the V8/node compile dies on
-        # 'openssl/opensslv.h: No such file'. zlib/nghttp2/libuv/c-ares round out
-        # node's declared deps.
-        for dep in package/libs/openssl package/libs/zlib \
-                   feeds/packages/libs/libnghttp2 feeds/packages/libs/libuv \
-                   feeds/packages/libs/c-ares; do
-          if [ -d "$dep" ]; then
-            make "$dep/compile" -j$(nproc) || make "$dep/compile" -j1 V=s
-          fi
-        done
-        make package/feeds/packages/node/compile -j$(nproc) || make package/feeds/packages/node/compile -j1 V=s
+        # node's V8 is built as a HOST tool (build_dir/hostpkg/node-v20.x via
+        # include/host-build.mk -> the `host-compile` target). Building the host
+        # tool needs only python3/host (HOST_BUILD_DEPENDS) plus the host toolchain
+        # already installed above -- it does NOT need target openssl/zlib/etc.
+        #
+        # Do NOT `make package/libs/openssl/compile` (or any target package) here:
+        # at the OpenWrt top level that pulls in the sibling `package/kernel/linux`
+        # target (package/Makefile: `package-y += kernel/linux`). The kernel has
+        # not been prepared yet (no linux-x.y.z/.config, no modules.builtin), so
+        # kmod packaging dies with "pppox.ko is missing" and fails the whole step.
+        # The target openssl/zlib deps are built in correct dependency order by the
+        # full firmware compile; only the expensive host V8 needs pre-warming.
+        make package/feeds/packages/node/host/compile -j$(nproc) \
+          || make package/feeds/packages/node/host/compile -j1 V=s
         echo "--- ccache stats after preflight ---"
         ccache -s || true
         echo "--- Preflight OK ---"
