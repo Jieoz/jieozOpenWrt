@@ -218,6 +218,7 @@ jobs:
       run: |
         cd openwrt
         make defconfig
+        grep -q ^CONFIG_CCACHE=y .config && echo "ccache: CONFIG_CCACHE survived defconfig" || echo "WARNING: CONFIG_CCACHE was dropped by defconfig"
         make download -j8
         # Remove obviously broken tiny download artifacts, but never touch Go module
         # cache files: valid Go source files can be smaller than 1 KiB.
@@ -259,8 +260,12 @@ jobs:
         # full firmware compile; only the expensive host V8 needs pre-warming.
         make package/feeds/packages/node/host/compile -j$(nproc) \
           || make package/feeds/packages/node/host/compile -j1 V=s
+        echo "--- Preflight: warm ccache with safe C/C++ target libs (no kernel dep) ---"
+        for P in package/libs/zlib; do
+          make $P/compile -j$(nproc) || make $P/compile -j1 V=s || echo "preflight warm: $P skipped"
+        done
         echo "--- ccache stats after preflight ---"
-        ccache -s || true
+        CCACHE_DIR="$GITHUB_WORKSPACE/openwrt/.ccache" ccache -s || true
         echo "--- Preflight OK ---"
 
     # Save ccache immediately after the expensive toolchain/preflight phase.
