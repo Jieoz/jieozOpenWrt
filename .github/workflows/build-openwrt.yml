@@ -6,7 +6,7 @@
 #
 # https://github.com/P3TERX/Actions-OpenWrt
 # Description: Build OpenWrt using GitHub Actions
-# 
+#
 
 name: Build OpenWrt
 
@@ -37,7 +37,10 @@ env:
   TZ: Asia/Shanghai
 
 jobs:
-  build:
+  # Job 1: bootstrap the build tree (tools + toolchain + host V8 preflight) and
+  # hand the entire /workdir/openwrt tree off to the firmware job via cache.
+  # Split from the firmware compile so neither half hits the 6h-per-job wall.
+  toolchain:
     runs-on: ubuntu-22.04
 
     steps:
@@ -58,17 +61,17 @@ jobs:
         echo "--- Disk usage after pruning preinstalled tools ---"
         df -hT
         echo "--------------------------------------------------"
-        
+
         # 重新生成一个标准的 Ubuntu 22.04 sources.list 文件
         echo "deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list > /dev/null
         echo "deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list > /dev/null
         echo "deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list > /dev/null
-        
+
         # 清理 APT 缓存，确保从头更新
         sudo apt-get clean
-        
+
         sudo -E apt-get update # 确保这里是 update，而不是 install
-        
+
         # --- 恢复你之前的依赖列表，并分批安装，以解决依赖冲突 ---
         # 核心编译工具和基础库
         sudo -E apt-get -qq install -f build-essential ccache git curl wget rsync bzip2 gzip unzip p7zip p7zip-full squashfs-tools zlib1g-dev python3 python3-setuptools libpython3-dev
@@ -82,15 +85,15 @@ jobs:
         sudo -E apt-get -qq install -f ack antlr3 asciidoc binutils cmake cpio device-tree-compiler fastjar \
           gperf haveged help2man intltool lrzsz mkisofs msmtp ninja-build patch pkgconf \
           python3-pyelftools qemu-utils scons subversion texinfo uglifyjs upx-ucl vim xxd xmlto
-        
+
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
-        
+
         # 添加df -h在初始化环境后，检查磁盘空间
         echo "--- Disk usage after environment initialization ---"
         df -hT
         echo "---------------------------------------------------"
-        
+
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /workdir
         sudo chown $USER:$GROUPS /workdir
@@ -280,6 +283,114 @@ jobs:
         key: ${{ runner.os }}-lede-ccache-${{ github.run_id }}
         enableCrossOsArchive: true
 
+    # Hand the ENTIRE built tree (staging_dir/build_dir/toolchain) to the firmware
+    # job. Use cache/save (NOT upload-artifact): artifacts do not preserve
+    # symlinks/permissions/mtimes and would corrupt the OpenWrt build tree, whereas
+    # cache uses tar and preserves them. Save the symlink target's real dir.
+    - name: Save build tree for firmware job
+      uses: actions/cache/save@v4
+      with:
+        path: /workdir/openwrt
+        key: ${{ runner.os }}-lede-buildtree-${{ github.run_id }}
+        enableCrossOsArchive: true
+
+  # Job 2: restore the bootstrapped tree from job 1 and run the full firmware
+  # compile + all post-compile upload/release steps. `needs: toolchain` so it
+  # only starts after the handoff cache has been saved.
+  firmware:
+    runs-on: ubuntu-22.04
+    needs: toolchain
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@main
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL \
+          /usr/share/swift /usr/local/.ghcup /usr/local/share/boost /usr/local/julia* /opt/az
+        if [ -f /swapfile ]; then
+          sudo swapoff /swapfile || true
+          sudo rm -f /swapfile
+        fi
+        sudo docker image prune --all --force
+        echo "--- Disk usage after pruning preinstalled tools ---"
+        df -hT
+        echo "--------------------------------------------------"
+
+        # 重新生成一个标准的 Ubuntu 22.04 sources.list 文件
+        echo "deb http://archive.ubuntu.com/ubuntu/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list > /dev/null
+        echo "deb http://archive.ubuntu.com/ubuntu/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list > /dev/null
+        echo "deb http://archive.ubuntu.com/ubuntu/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list > /dev/null
+
+        # 清理 APT 缓存，确保从头更新
+        sudo apt-get clean
+
+        sudo -E apt-get update # 确保这里是 update，而不是 install
+
+        # --- 恢复你之前的依赖列表，并分批安装，以解决依赖冲突 ---
+        # 核心编译工具和基础库
+        sudo -E apt-get -qq install -f build-essential ccache git curl wget rsync bzip2 gzip unzip p7zip p7zip-full squashfs-tools zlib1g-dev python3 python3-setuptools libpython3-dev
+
+        # 开发库和多架构支持
+        sudo -E apt-get -qq install -f autoconf automake autopoint bison flex gawk gettext gcc-multilib g++-multilib \
+          libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev \
+          libncurses5-dev libncursesw5-dev libreadline-dev libssl-dev libtool swig
+
+        # 其他工具和实用程序
+        sudo -E apt-get -qq install -f ack antlr3 asciidoc binutils cmake cpio device-tree-compiler fastjar \
+          gperf haveged help2man intltool lrzsz mkisofs msmtp ninja-build patch pkgconf \
+          python3-pyelftools qemu-utils scons subversion texinfo uglifyjs upx-ucl vim xxd xmlto
+
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean
+
+        # 添加df -h在初始化环境后，检查磁盘空间
+        echo "--- Disk usage after environment initialization ---"
+        df -hT
+        echo "---------------------------------------------------"
+
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+
+    # Restore the exact build tree from THIS run's toolchain job. No restore-keys
+    # fallback: it must be the tree from this run, not a stale one. Recreate the
+    # /workdir symlink so every step's $GITHUB_WORKSPACE/openwrt and /workdir/openwrt
+    # path assumptions keep working on this fresh runner.
+    - name: Restore build tree from toolchain job
+      uses: actions/cache/restore@v4
+      with:
+        path: /workdir/openwrt
+        key: ${{ runner.os }}-lede-buildtree-${{ github.run_id }}
+        fail-on-cache-miss: true
+        enableCrossOsArchive: true
+
+    - name: Recreate workspace symlink
+      run: ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+    # Restore ccache (same step as the toolchain job) so the incremental firmware
+    # compile reuses the warmed toolchain/GCC/V8 objects instead of recompiling.
+    - name: Restore ccache
+      id: restore-ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: openwrt/.ccache
+        key: ${{ runner.os }}-lede-ccache-${{ github.run_id }}
+        restore-keys: |
+          ${{ runner.os }}-lede-ccache-
+        enableCrossOsArchive: true
+
+    - name: Verify build tree handoff
+      run: |
+        set -e
+        test -d /workdir/openwrt/staging_dir
+        test -d /workdir/openwrt/build_dir
+        ls /workdir/openwrt/staging_dir/toolchain-* >/dev/null
+        echo "--- Build tree handoff OK ---"
+
     - name: Compile the firmware
       id: compile
       run: |
@@ -296,6 +407,16 @@ jobs:
         echo "--- Disk usage after compiling firmware ---"
         df -hT
         echo "------------------------------------------"
+
+    # Save ccache after the full compile so the rolling ccache keeps improving
+    # across runs. if: always() so it saves even on partial/failed compiles.
+    - name: Save ccache after compile
+      uses: actions/cache/save@v4
+      if: always()
+      with:
+        path: openwrt/.ccache
+        key: ${{ runner.os }}-lede-ccache-${{ github.run_id }}
+        enableCrossOsArchive: true
 
     - name: Check space usage # 这一步你已有，但位置靠后，可作为最终检查
       if: (!cancelled())
