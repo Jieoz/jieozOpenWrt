@@ -201,6 +201,23 @@ jobs:
         cd openwrt
         $GITHUB_WORKSPACE/$DIY_P2_SH
 
+
+    # Guard the failure mode that killed run 31631152073 after ~4h of compiling:
+    # an upstream feed Makefile pinning a dependency as `$(PKG_VERSION)-r$(PKG_RELEASE)`
+    # (OpenWrt-official format) can never resolve in this lede tree, which builds
+    # versions without the `r`. opkg only notices at `package/install`, i.e. at the
+    # very end. diy-part2.sh normalizes those pins; assert here that none survive,
+    # so a future upstream reintroduction fails in seconds instead of hours.
+    - name: Validate package release-suffix pins
+      run: |
+        set -e
+        cd openwrt
+        if grep -qF -- 'VERSION:=$(PKG_VERSION)-r$(PKG_RELEASE)' include/package-defaults.mk; then
+          echo "tree uses OpenWrt-style -r suffix; -r pins are legitimate here"
+        else
+          ! grep -rqF --include=Makefile -- '-r$(PKG_RELEASE))' feeds package
+        fi
+
     - name: Validate LuCI theme selection
       run: |
         set -e
