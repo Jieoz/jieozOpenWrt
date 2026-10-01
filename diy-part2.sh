@@ -47,3 +47,14 @@ else
     done
   fi
 fi
+
+# fail2ban 1.1.0 still passes test_suite= to setup(). setuptools >= 72 removed
+# dist.check_test_suite, so the host build dies with:
+#   AttributeError: module 'setuptools.dist' has no attribute 'check_test_suite'
+# Official openwrt/packages has no patch for this. Drop the keyword. The
+# generator refuses to write a hunk that lost the line. OpenWrt quilt-applies
+# patches/*.patch at prepare time, before the setuptools build.
+mkdir -p feeds/packages/net/fail2ban/patches
+python3 "$GITHUB_WORKSPACE/scripts/fail2ban-drop-test-suite.py" \
+  feeds/packages/net/fail2ban/patches/030-drop-test-suite.patch
+grep -q "test_suite" feeds/packages/net/fail2ban/patches/030-drop-test-suite.patch
