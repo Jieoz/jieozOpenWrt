@@ -218,6 +218,17 @@ jobs:
           ! grep -rqF --include=Makefile -- '-r$(PKG_RELEASE))' feeds package
         fi
 
+    # Linux 6.18.57+ added tc_depth:2 to struct sk_buff; lede's shortcut-fe
+    # patch 953 must carry it as context or kernel-headers prepare fails.
+    - name: Validate shortcut-fe skbuff hunk
+      run: |
+        set -e
+        cd openwrt
+        sub=$(sed -n 's/^LINUX_VERSION-6\.18 = \.\([0-9]*\).*/\1/p' include/kernel-6.18)
+        if [ "${sub:-0}" -ge 57 ]; then
+          grep -q 'tc_depth' target/linux/generic/hack-6.18/953-net-patch-linux-kernel-to-support-shortcut-fe.patch
+        fi
+
     - name: Validate LuCI theme selection
       run: |
         set -e

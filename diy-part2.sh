@@ -58,3 +58,9 @@ mkdir -p feeds/packages/net/fail2ban/patches
 python3 "$GITHUB_WORKSPACE/scripts/fail2ban-drop-test-suite.py" \
   feeds/packages/net/fail2ban/patches/030-drop-test-suite.patch
 grep -q "test_suite" feeds/packages/net/fail2ban/patches/030-drop-test-suite.patch
+
+# lede hack-6.18/953 (shortcut-fe) inserts fast_forwarded:1 into struct sk_buff
+# with pre-6.18.57 context. Linux 6.18.57 added `tc_depth:2` at that spot, so the
+# patch fails at toolchain/kernel-headers prepare ("Hunk #1 FAILED at 1030").
+# Rebase that one hunk; the script no-ops on older 6.18 or once upstream fixes it.
+python3 "$GITHUB_WORKSPACE/scripts/sfe-953-skbuff-tc-depth.py"
